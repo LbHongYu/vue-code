@@ -6,33 +6,46 @@ const { VueLoaderPlugin } = require('vue-loader')
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
 // const FriendlyErrorsWebpackPlugin = require('friendly-errors-webpack-plugin');
 const tsImportPlugin = require('ts-import-plugin');
+const resourceRules = require('./resource-rules');
 
-module.exports =  (...args) => {
+module.exports =  () => {
   return {
-    // watch: true,
     mode: 'development',
+
     devtool: 'eval-cheap-source-map',
+
     stats: 'errors-only',
+    // 在初始构建之后，webpack 将继续监听任何已解析文件的更改
+    watch: true,
+
+    watchOptions: {
+      // 时间内进行的任何其他更改都聚合到一次重新构建里。以毫秒为单位
+      aggregateTimeout: 600,
+      // 被排除监听的文件
+      ignored: ['**/node_modules'], 
+    },
+
     entry: {
-      index: path.resolve(__dirname, './src/main.ts'),
+      index: path.resolve(__dirname, '../src/main.ts'),
     },
   
     output: {
-      publicPath: '/w-hrms-mobile/',
-      path: path.resolve(__dirname, './w-hrms-mobile'),
-      filename: '[name]-[hash].js'
+      publicPath: '/vue-code/',
+      path: path.resolve(__dirname, '../vue-code'),
+      filename:  '[name].[contenthash].js',
     },
   
     resolve: {
       extensions: ['.ts', '.js', '.vue', '.json'],
       alias: {
-        '@': path.resolve(__dirname, 'src'),
+        '@': path.resolve(__dirname, '../src'),
         // 'assets': path.resolve(__dirname, './src/assets')
       }
     },
   
     module: {
       rules: [
+        ...resourceRules,
         { 
           test: /\.([cm]?ts|tsx)$/, 
           loader: 'ts-loader',
@@ -53,77 +66,37 @@ module.exports =  (...args) => {
             }
           },
         },
-        {
-          test: /\.js$/,
-          exclude: /node_modules/,
-          use: ['cache-loader', 'thread-loader', 'babel-loader']
-        }, {
-          test: /\.s[ac]ss$/i,
-          use: [
-            'vue-style-loader',
-            'css-loader',
-            'postcss-loader',
-            'sass-loader',
-            {
-              loader: 'style-resources-loader', // 如果使用了variables , mixins , functions 等功能，必须添加这个插件
-              options: {
-                patterns: path.resolve(__dirname, './src/assets/scss/file.scss') // 使用 variables , mixins , functions 等功能的文件
-              }
-            }
-          ]
-        },
-  
-        {
-          test: /\.css$/i,
-          // exclude: /node_modules/,
-          use: [
-            'style-loader',
-            'css-loader'
-          ]
-        },
-  
-        {
-          test: /\.(png|svg|jpg|jpeg|gif)$/i,
-          exclude: /node_modules/,
-          type: 'asset/resource',
-          generator: {
-            filename: 'img/[hash][ext][query]'
-          }
-        },
-        {
-          test: /\.(mp4|webm|ogg|mp3|wav|flac|aac)(\?.*)?$/,
-          exclude: /node_modules/,
-          type: 'asset/resource',
-          generator: {
-            filename: 'media/[hash][ext][query]'
-          }
-        },
-  
-        {
-          test: /\.(woff2?|woff|svg|eot|ttf|otf)(\?.*)?$/i,
-          exclude: /node_modules/,
-          type: 'asset/resource',
-          generator: {
-            filename: 'fonts/[hash][ext][query]'
-          }
-        },
-        {
-          test: /\.vue$/,
-          exclude: /node_modules/,
-          use: ['vue-loader']
-        }
+
       ]
     },
     devServer: {
       // contentBase: './webpack-vue',
       // NOTE:
-      // hot: true，启用 webpack 的 Hot Module Replacement 功能，
-      // 也可以在 plugins 数组中引入 HotModuleReplacementPlugin
+      // hot: true，从 webpack-dev-server v4 开始，HMR 是默认启用的。
+      // 它会自动应用 webpack.HotModuleReplacementPlugin，这是启用 HMR 所必需的。
+      // 因此当 hot 设置为 true 或者通过 CLI 设置 --hot，你不需要在你的 webpack.config.js 添加该插件。
       hot: true,
-      port: 9527,
-  
-      proxy: {
-      }    
+
+      // 在服务器已经启动后打开浏览器
+      open: true,
+      
+      port: 6060,
+      
+      // 启用 gzip compression
+      compress: true, 
+      
+      client: {
+        // 当出现编译错误或警告时，在浏览器中显示全屏覆盖
+        overlay: { // 只想显示错误信息
+          errors: true,
+          warnings: false,
+        }, 
+      },
+
+      // 使用的是 http-proxy-middleware 
+      proxy: { 
+        '/api': 'http://localhost:3000',
+      },
     },
     plugins: [
       // new FriendlyErrorsWebpackPlugin(),
@@ -135,7 +108,7 @@ module.exports =  (...args) => {
       new VueLoaderPlugin(),
   
       new HtmlWebpackPlugin({
-        template: path.resolve(__dirname, './index.html'),
+        template: path.resolve(__dirname, '../index.html'),
       }),
       // new webpack.HotModuleReplacementPlugin()
     ]
