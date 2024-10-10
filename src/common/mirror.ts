@@ -54,7 +54,7 @@ class MirrorWatch {
 		}
 
 		window.addEventListener('load', () => {
-			this.report();
+			// this.report();
 		}, false);
 	}
 
@@ -342,7 +342,6 @@ function AJAX(
 
 	xhr.onreadystatechange = () => {
 		if (isTimeOut) return;
-
 		clearTimeout(timer);
 
 		if (xhr.readyState === 4) {
@@ -490,11 +489,7 @@ export function getUrlParam (name: string) {
   return res;
 }
 
-/**
- * 将对象转化为url参数字符串
- * @param obj
- * @returns {string}
- */
+// 将对象转化为url参数字符串
 function getRequestBodyParams (obj: iRequestBodyParams): string {
 	let str: string = '';
 
