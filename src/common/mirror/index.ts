@@ -14,7 +14,7 @@ type iConfig ={
 	systemId: string; // 项目id
 	timeout?: number; // 监控服务的接口超时时长
 	delayReport?: number; // 延迟上报的秒数
-	minLogLength?: number; // 日志立即上报的最小长度, 小于该长度时 3000 后上报
+	maxLogLength?: number; // 日志立即上报的最小长度, 小于该长度时 3000 后上报
 	mutatedConsole?: consoleMethod[]; // 需要代理的 console
 	maxReportedTimes?:number; // 上报最大次数
 }
@@ -30,12 +30,12 @@ type iArgs = [
 function noop () {}
 
 class MirrorWatch {
-	private config:iConfig = {
+	public config:iConfig = {
 		reportURL: '',
 		systemId: '',
 		timeout: 1000,
 		delayReport : 5000,
-		minLogLength: 10,
+		maxLogLength: 10,
 		maxReportedTimes: 30,
 		mutatedConsole: ['error']
 	}; 
@@ -51,20 +51,6 @@ class MirrorWatch {
 		this.proxyConsole();
 		this.proxyAjax();
 		this.proxyGlobalError();
-		
-		try {
-			const { systemId } = this.config;
-			const logs = JSON.parse(localStorage.getItem(systemId + '_Logs') as string);
-
-			if (Array.isArray(logs)) this.logs = logs;
-		} catch (error) {
-			console.log(error);
-		}
-
-		window.addEventListener('load', () => {
-      // TODO: 移除注释
-			// this.report();
-		}, false);
 	}
 
 	public init (config: iConfig) {
@@ -72,6 +58,19 @@ class MirrorWatch {
 
 		if (systemId) {
       Object.assign(this.config, config);
+
+			try {
+				const { systemId } = this.config;
+				const logs = JSON.parse(localStorage.getItem(systemId + '_Logs') as string);
+				if (Array.isArray(logs)) this.logs = logs;
+			} catch (error) {
+				console.log(error);
+			}
+	
+			window.addEventListener('load', () => {
+				// TODO: 移除注释
+				// this.report();
+			}, false);			
     } else {
       console.warn('[MirrorWatch]', 'systemId is unknow');
     }
@@ -93,10 +92,12 @@ class MirrorWatch {
 							return d
 						}
 					}).join(',');
+					
+					console.log('【proxyConsole】', message);
 
 					this.logs.push({
 						message,
-						type,
+						type: 'consoleError_' + type,
 						createdTime: Date.now()
 					});
 
@@ -126,7 +127,7 @@ class MirrorWatch {
 				if (req.readyState === 4 && req.status >= 400) {
 					context.logs.push({
 						message: `${method} ${url} ${req.status}`,
-						type: 'error'
+						type: 'NetworkError'
 					});
 				}
 
@@ -156,7 +157,7 @@ class MirrorWatch {
 
 						context.logs.push({
 							message: errMsg,
-							type: 'error',
+							type: 'VueError',
 							createdTime: Date.now()
 						});
 
@@ -176,26 +177,24 @@ class MirrorWatch {
 	 * 收集全局错误信息
 	 */
 	private proxyGlobalError(): void {
-    window.addEventListener('error', (...args) => {
-      console.log(args);
-    }, true);
-    
-		window.onerror = (message, url, line, col, error) => {
+    window.addEventListener('error', ({ message, filename, lineno, colno, error }) => {
+			console.log('【window event】', message, filename, lineno, colno, error);
+			
 			let errMsg: any = message;
 			if (error && error.stack) errMsg = processStackMsg(error);
-
 			this.logs.push({
-				message: encodeURIComponent(errMsg.substr(0, 500)),
-				type: 'error',
-				line,
-				col,
+				// message: encodeURIComponent(errMsg.substr(0, 500)),
+				message: errMsg.substr(0, 500),
+				type: 'jsError',
+				filename,
+				lineno,
+				colno,
 				createdTime: Date.now()
 			});
 
 			this.storeLogs(this.logs);
-
 			this.reportLogs();
-		};
+    });
 	}
 
 	public setUser(userInfo: any): void {
@@ -210,7 +209,8 @@ class MirrorWatch {
 	public report(async: boolean = true): void {
 		const {reportURL, systemId, timeout} = this.config;
 		if (!reportURL || !systemId) {
-			return console.warn('[MirrorWatch]', 'reportURL or systemId is unknow');
+			console.warn('[MirrorWatch]', 'reportURL or systemId is unknow');
+			return; 
 		}
 
 		if (this.reportedTimes < (this.config.maxReportedTimes as number)) {
@@ -280,11 +280,11 @@ class MirrorWatch {
 
 	private reportLogs(): void {
 		clearTimeout(this.timer);
-
-		if (this.logs.length >= (this.config.minLogLength as number)) {
+		// 如果 logs 数量达到 maxLogLength, 立马上报
+		if (this.logs.length >= (this.config.maxLogLength as number)) {
 			this.report();
-		} else {
-			this.timer = setTimeout(this.report, 3000);
+		} else { // 否则 3 秒之后再上报
+			this.timer = setTimeout(() => { this.report(); }, 3000);
 		}
 	}
 
