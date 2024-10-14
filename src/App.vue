@@ -1,5 +1,18 @@
 <script setup lang="ts">
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRouter } from 'vue-router';
+
+let route = useRouter();
+function toPushPage (path) {
+  route.push(path)
+}
+
+function toReplacePage (path) {
+  route.replace(path)
+}
+
+function toGoPage () {
+  history.go(-1)
+}
 </script>
 
 <template>
@@ -8,8 +21,10 @@ import { RouterLink, RouterView } from 'vue-router'
 
     <div class="wrapper">
       <nav>
-        <RouterLink to="/">Home</RouterLink>
-        <RouterLink to="/about">About</RouterLink>
+        <div @click="toPushPage('/home')">toPushPage Home</div>
+        <div @click="toPushPage('/about')">toPushPage About</div>
+        <div @click="toReplacePage('/demo-1')">toReplacePage demo-1</div>
+        <div @click="toGoPage()">toGo demo-1</div>
       </nav>
     </div>
   </header>

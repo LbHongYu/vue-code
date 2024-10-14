@@ -1,6 +1,5 @@
 // 错误捕获、处理、过滤，并且结合了白屏检测、请求错误监控、行为日志记录、数据治理等技术
 import { 
-  AJAX,
   typeChecker,
   decycle,
   processStackMsg,
@@ -9,14 +8,15 @@ import {
 } from './tools';
 
 type consoleMethod = 'error' | 'info' | 'warn';
-type iConfig ={
+type iConfig = {
+	env: 'local' | 'test' | 'prod';
 	reportURL?: string; // 监控服务的接口
 	systemId: string; // 项目id
-	timeout?: number; // 监控服务的接口超时时长
 	delayReport?: number; // 延迟上报的秒数
 	maxLogLength?: number; // 日志立即上报的最小长度, 小于该长度时 3000 后上报
 	mutatedConsole?: consoleMethod[]; // 需要代理的 console
 	maxReportedTimes?:number; // 上报最大次数
+	bReportImmediately?: boolean; // 报错后是否立即上报
 }
 
 type iArgs = [
@@ -31,12 +31,13 @@ function noop () {}
 
 class MirrorWatch {
 	public config:iConfig = {
+		env: 'local',
 		reportURL: '',
 		systemId: '',
-		timeout: 1000,
 		delayReport : 5000,
 		maxLogLength: 10,
 		maxReportedTimes: 30,
+		bReportImmediately: false,
 		mutatedConsole: ['error']
 	}; 
 
@@ -51,26 +52,41 @@ class MirrorWatch {
 		this.proxyConsole();
 		this.proxyAjax();
 		this.proxyGlobalError();
+		this.proxyPromiseError();
+		this.proxyHistory();
 	}
 
 	public init (config: iConfig) {
-		const { systemId } = config;
+		const { systemId, bReportImmediately } = config;
 
 		if (systemId) {
       Object.assign(this.config, config);
 
 			try {
-				const { systemId } = this.config;
+				const { systemId, env } = this.config;
 				const logs = JSON.parse(localStorage.getItem(systemId + '_Logs') as string);
-				if (Array.isArray(logs)) this.logs = logs;
+				if (Array.isArray(logs)) {
+          this.logs = logs;
+
+          // 本地测试环境，超过 100 条就清理日志
+          if (['local'].includes(env) && logs.length > 100) { 
+            localStorage.removeItem(systemId + '_Logs');
+            this.logs = [];
+          }
+        }
 			} catch (error) {
 				console.log(error);
 			}
-	
-			window.addEventListener('load', () => {
-				// TODO: 移除注释
-				// this.report();
-			}, false);			
+      
+			if (!bReportImmediately) {
+				// 如果切换窗口的时候有错误信息(关闭窗口、关闭浏览器都会执行)，执行一次上报
+				document.addEventListener("visibilitychange", () => {
+					if (document.visibilityState === "hidden" && this.logs.length) {
+						localStorage.setItem('report', '1');
+						this.report();          
+					}
+				});			
+			}
     } else {
       console.warn('[MirrorWatch]', 'systemId is unknow');
     }
@@ -96,13 +112,13 @@ class MirrorWatch {
 					console.log('【proxyConsole】', message);
 
 					this.logs.push({
-						message,
 						type: 'consoleError_' + type,
+						message,
 						createdTime: Date.now()
 					});
 
 					this.storeLogs(this.logs);
-					this.reportLogs();
+					if (this.config.bReportImmediately) this.reportLogs();
 				}
 
 				method.apply(console, args);
@@ -120,15 +136,19 @@ class MirrorWatch {
 		XMLHttpRequest.prototype.open = function (...args:iArgs) {
 			const req = this;
 			const method = args[0], 
-						url = args[1];
+			url = args[1];
 			const onreadystatechange = req.onreadystatechange || function () {};
-
+			
 			req.onreadystatechange = function (..._args) {
-				if (req.readyState === 4 && req.status >= 400) {
-					context.logs.push({
-						message: `${method} ${url} ${req.status}`,
-						type: 'NetworkError'
-					});
+				if (req.readyState === 4) {
+					if (req.status >= 400) {
+						console.log('【proxyAjax】', req.status);
+						context.logs.push({
+							type: 'NetworkError',
+							message: `${method} ${url} ${req.status}`,
+							createdTime: Date.now(),
+						});
+					}
 				}
 
 				return onreadystatechange.apply(req, _args);
@@ -156,13 +176,13 @@ class MirrorWatch {
 						if (vm?.$options?.name) errMsg = `[Component Name: ${vm.$options.name}]->${errMsg}`;
 
 						context.logs.push({
-							message: errMsg,
 							type: 'VueError',
+							message: errMsg,
 							createdTime: Date.now()
 						});
 
 						context.storeLogs(context.logs);
-						context.reportLogs();
+						if (context.config.bReportImmediately) context.reportLogs();
 					};
 				}
 
@@ -177,24 +197,91 @@ class MirrorWatch {
 	 * 收集全局错误信息
 	 */
 	private proxyGlobalError(): void {
-    window.addEventListener('error', ({ message, filename, lineno, colno, error }) => {
-			console.log('【window event】', message, filename, lineno, colno, error);
-			
-			let errMsg: any = message;
-			if (error && error.stack) errMsg = processStackMsg(error);
-			this.logs.push({
-				// message: encodeURIComponent(errMsg.substr(0, 500)),
-				message: errMsg.substr(0, 500),
-				type: 'jsError',
-				filename,
-				lineno,
-				colno,
-				createdTime: Date.now()
-			});
+    // 需要在捕获阶段捕捉资源加载失败错误
+    window.addEventListener('error', (evt) => {
+      const { message, filename, lineno, colno, error, target } = evt;
+			console.log('【error event】', evt);
+      //  JS运行错误
+			if (filename) {
+        let errMsg: any = message;
+        if (error && error.stack) errMsg = processStackMsg(error);
+        this.logs.push({
+          // message: encodeURIComponent(errMsg.substr(0, 500)),
+          type: 'jsError',
+          message: errMsg.substr(0, 500),
+          createdTime: Date.now(),
+          filename,
+          lineno,
+          colno,
+        });
+      }
+
+      // 资源加载错误
+      let tag = (target as HTMLElement).localName;
+      if(tag){
+        const src = tag === 'link' ? (target as HTMLLinkElement).href : target.src;
+        tag = tag === 'source' ? 'vedio' : tag;
+
+        this.logs.push({
+          type: 'sourceError',
+          message: `${tag} ${src}`,
+          createdTime: Date.now(),
+        });
+      } 
 
 			this.storeLogs(this.logs);
-			this.reportLogs();
-    });
+			if (this.config.bReportImmediately) this.reportLogs();
+    }, true);
+	}
+  
+	// 收集 Promise 未 catch 的错误信息
+	private proxyPromiseError(): void {
+    window.addEventListener('unhandledrejection', (evt) => {
+			console.log('【unhandledrejection event】', evt);
+      let errMsg = evt?.reason?.message;
+
+      if (evt?.reason?.stack) errMsg = processStackMsg(evt.reason);
+      
+      this.logs.push({
+        // message: encodeURIComponent(errMsg.substr(0, 500)),
+        type: 'unhandledrejectionError',
+        message: errMsg.substr(0, 500),
+        createdTime: Date.now(),
+      });
+
+			this.storeLogs(this.logs);
+			if (this.config.bReportImmediately) this.reportLogs();
+    }, true);
+	}
+
+	// 收集 Promise 未 catch 的错误信息
+	private proxyHistory(): void {
+    const _wr = function(type: 'pushState' | 'replaceState' | 'go') {
+			const method: History = history[type];
+
+			return function (...args) {
+				const rv = method.apply(history, args);
+				
+				const evt = new Event(type);
+				evt.args = args;
+				window.dispatchEvent(evt);
+				return rv;
+			};
+		};
+
+		history.pushState = _wr('pushState');
+		history.replaceState = _wr('replaceState');
+		history.go = _wr('go');
+
+		window.addEventListener('replaceState', function(e) {
+			console.log('【replaceState】', e);
+		});
+		window.addEventListener('pushState', function(e) {
+			console.log('【pushState】', e);
+		});
+		window.addEventListener('go', function(e) {
+			console.log('【history go】', e);
+		});
 	}
 
 	public setUser(userInfo: any): void {
@@ -206,10 +293,13 @@ class MirrorWatch {
 	 * 上报错误
 	 * @param async 是否异步请求
 	 */
-	public report(async: boolean = true): void {
-		const {reportURL, systemId, timeout} = this.config;
+	public report(): void {
+		const { reportURL, systemId } = this.config;
 		if (!reportURL || !systemId) {
-			console.warn('[MirrorWatch]', 'reportURL or systemId is unknow');
+      // TODO:
+			// console.warn('[MirrorWatch]', 'reportURL or systemId is unknow');
+			// this.logs = [];
+			// localStorage.removeItem(this.config.systemId + '_Logs');
 			return; 
 		}
 
@@ -231,54 +321,18 @@ class MirrorWatch {
 			}
 
 			try {
-				AJAX(
-					reportURL, 
-					'POST', 
-					params, 
-					async, 
-					() => {
-						this.logs = [];
-						localStorage.removeItem(this.config.systemId + '_Logs');
-					},
-					noop, 
-					timeout as number
-				);
+        navigator.sendBeacon("/log", params);
+        this.logs = [];
+        localStorage.removeItem(this.config.systemId + '_Logs');
 			} finally {
 				this.reportedTimes++;
 			}
 		}
 	}
 
-	public reportPageTime(pageName: string, pageTime: number): void {
-		const {reportURL, systemId } = this.config;
-		if (reportURL && systemId) {
-			const pageParams = JSON.stringify({ pageName, pageTime });
-
-			try {
-				AJAX(
-					reportURL, 
-					'POST', 
-					{
-						systemId,
-						clientOrigin: window.location.host,
-						clientHref: window.location.pathname,
-						userInfo: this.userInfo,
-						uuid: this.uuid,
-						ua: window.navigator?.userAgent,
-						pageParams
-					}, 
-					true, 
-					noop, 
-					noop, 
-					0
-				);
-			} catch (e) {
-				console.log(e);
-			}
-		}
-	}
-
 	private reportLogs(): void {
+		console.log('reportLogs');
+		
 		clearTimeout(this.timer);
 		// 如果 logs 数量达到 maxLogLength, 立马上报
 		if (this.logs.length >= (this.config.maxLogLength as number)) {
