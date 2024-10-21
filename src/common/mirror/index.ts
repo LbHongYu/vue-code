@@ -14,6 +14,7 @@ type iConfig = {
 	systemId: string; // 项目id
 	delayReport?: number; // 延迟上报的秒数
 	maxLogLength?: number; // 日志立即上报的最小长度, 小于该长度时 3000 后上报
+	longTaskDuration?: number; // 被上报的线程繁忙时间最小值
 	mutatedConsole?: consoleMethod[]; // 需要代理的 console
 	maxReportedTimes?:number; // 上报最大次数
 	bReportImmediately?: boolean; // 报错后是否立即上报
@@ -36,6 +37,7 @@ class MirrorWatch {
 		systemId: '',
 		delayReport : 5000,
 		maxLogLength: 10,
+		longTaskDuration: 80,
 		maxReportedTimes: 30,
 		bReportImmediately: false,
 		mutatedConsole: ['error']
@@ -53,7 +55,7 @@ class MirrorWatch {
 		this.proxyAjax();
 		this.proxyGlobalError();
 		this.proxyPromiseError();
-		this.proxyHistory();
+		this.longTask();
 	}
 
 	public init (config: iConfig) {
@@ -162,7 +164,7 @@ class MirrorWatch {
  * Vue插件调用
  * @returns {object}
  */
-	public useVue(): object {
+	public proxyVue2Error(Vue): object {
 		const context = this;
 		return {
 			install (Vue): void {
@@ -191,6 +193,25 @@ class MirrorWatch {
 				}
 			}
 		};
+	}
+
+	// 
+	public proxyVue3Error(app) {
+		const context = this;
+    app.config.errorHandler = (err, vm, info) => {
+      let message: string = err?.stack ? processStackMsg(err)  : '';
+      if (info) message = `[Info: ${info}]${message}`;
+      if (vm?.$options?.name) message = `[Component: ${vm.$options.name}]${message}`;
+
+      context.logs.push({
+        type: 'VueError',
+        message,
+        createdTime: Date.now()
+      });
+
+      context.storeLogs(context.logs);
+      if (context.config.bReportImmediately) context.reportLogs();
+    };
 	}
 
 	/**
@@ -255,33 +276,60 @@ class MirrorWatch {
 	}
 
 	// 收集 Promise 未 catch 的错误信息
-	private proxyHistory(): void {
-    const _wr = function(type: 'pushState' | 'replaceState' | 'go') {
-			const method: History = history[type];
+	public proxyHistory(vueRouter): void {
+    vueRouter.afterEach((...args) => {
+      this.logs.push({
+        type: 'vueRouter_afterEach',
+        to: args[0],
+        from: args[1],
+        createdTime: Date.now(),
+      });
 
-			return function (...args) {
-				const rv = method.apply(history, args);
-				
-				const evt = new Event(type);
-				evt.args = args;
-				window.dispatchEvent(evt);
-				return rv;
-			};
-		};
+			this.storeLogs(this.logs);
+    });
+    
+    /* vueRouter.push = function (...args) {
+      _push.apply(vueRouter, args);
+      console.log('vueRouter.push', args);
 
-		history.pushState = _wr('pushState');
-		history.replaceState = _wr('replaceState');
-		history.go = _wr('go');
+      context.logs.push({
+        type: 'vueRouter_push',
+        message: JSON.stringify(args[0]),
+        createdTime: Date.now(),
+      });
 
-		window.addEventListener('replaceState', function(e) {
-			console.log('【replaceState】', e);
-		});
-		window.addEventListener('pushState', function(e) {
-			console.log('【pushState】', e);
-		});
-		window.addEventListener('go', function(e) {
-			console.log('【history go】', e);
-		});
+			context.storeLogs(context.logs);
+      return Promise.resolve();
+    } */
+	}
+
+	// 任何连续不间断的且主 UI 线程繁忙 50 毫秒及以上的时间区间
+	private longTask () {
+		/* 
+			1. 长耗时的事件回调（long running event handlers）
+			2. 代价高昂的回流和其他重绘（expensive reflows and other re-renders）
+			3. 浏览器在超过 50 毫秒的事件循环的相邻循环之间所做的工作 
+		*/
+
+		const context = this;
+		new PerformanceObserver(function(list) {
+			list.getEntries().forEach(function(entry) {
+				if (entry.duration > context?.config?.longTaskDuration) {
+					// 浏览器空闲的时候上报
+					requestIdleCallback(() => {
+						context.logs.push({
+							type: 'longTask',
+							message: 'longTask',
+							createdTime: Date.now(),
+							startTime: entry.startTime,
+							duration: entry.duration,
+						});
+
+						context.storeLogs(context.logs);
+					});
+				}
+			})
+		}).observe({ entryTypes: ['longtask']});
 	}
 
 	public setUser(userInfo: any): void {
