@@ -5278,7 +5278,7 @@ function createAppContext() {
 }
 let uid$1 = 0;
 function createAppAPI(render, hydrate) {
-  return function createApp(rootComponent, rootProps = null) {
+  return function (rootComponent, rootProps = null) {
     if (!isFunction(rootComponent)) {
       rootComponent = extend({}, rootComponent);
     }
@@ -5366,7 +5366,8 @@ function createAppAPI(render, hydrate) {
           if (rootContainer.__vue_app__) {
             warn$1(
               `There is already an app instance mounted on the host container.
- If you want to mount another app on the same host container, you need to unmount the previous app by calling \`app.unmount()\` first.`
+               If you want to mount another app on the same host container, 
+               you need to unmount the previous app by calling \`app.unmount()\` first.`
             );
           }
           const vnode = createVNode(rootComponent, rootProps);
@@ -5376,6 +5377,7 @@ function createAppAPI(render, hydrate) {
           } else if (namespace === false) {
             namespace = void 0;
           }
+
           {
             context.reload = () => {
               render(
@@ -5401,7 +5403,9 @@ function createAppAPI(render, hydrate) {
         } else {
           warn$1(
             `App has already been mounted.
-If you want to remount the same app, move your app creation logic into a factory function and create fresh app instances for each mount - e.g. \`const createMyApp = () => createApp(App)\``
+             If you want to remount the same app, 
+             move your app creation logic into a factory function and create fresh app instances for each mount 
+             - e.g. \`const createMyApp = () => createApp(App)\``
           );
         }
       },
@@ -6690,6 +6694,7 @@ function createRenderer(options) {
 function createHydrationRenderer(options) {
   return baseCreateRenderer(options, createHydrationFunctions);
 }
+// TODO: 入口
 function baseCreateRenderer(options, createHydrationFns) {
   const target = getGlobalThis();
   target.__VUE__ = true;
@@ -10476,6 +10481,7 @@ class VueElement extends BaseClass {
     }
   }
   _update() {
+    // baseCreateRenderer - render
     render(this._createVNode(), this.shadowRoot);
   }
   _createVNode() {
@@ -10975,7 +10981,7 @@ const withKeys = (fn, modifiers) => {
 };
 
 const rendererOptions = /* @__PURE__ */ extend({ patchProp }, nodeOps);
-let renderer;
+let renderer; // 全局渲染器
 let enabledHydration = false;
 function ensureRenderer() {
   return renderer || (renderer = createRenderer(rendererOptions));
@@ -10992,6 +10998,7 @@ const hydrate = (...args) => {
   ensureHydrationRenderer().hydrate(...args);
 };
 const createApp = (...args) => {
+  // createAppAPI
   const app = ensureRenderer().createApp(...args);
   {
     injectNativeTagCheck(app);
@@ -11000,8 +11007,8 @@ const createApp = (...args) => {
   const { mount } = app;
   app.mount = (containerOrSelector) => {
     const container = normalizeContainer(containerOrSelector);
-    if (!container)
-      return;
+    if (!container)  return;
+    
     const component = app._component;
     if (!isFunction(component) && !component.render && !component.template) {
       component.template = container.innerHTML;
@@ -11116,4 +11123,164 @@ const compile = () => {
   }
 };
 
-export { BaseTransition, BaseTransitionPropsValidators, Comment, DeprecationTypes, EffectScope, ErrorCodes, ErrorTypeStrings, Fragment, KeepAlive, ReactiveEffect, Static, Suspense, Teleport, Text, TrackOpTypes, Transition, TransitionGroup, TriggerOpTypes, VueElement, assertNumber, callWithAsyncErrorHandling, callWithErrorHandling, camelize, capitalize, cloneVNode, compatUtils, compile, computed, createApp, createBlock, createCommentVNode, createElementBlock, createBaseVNode as createElementVNode, createHydrationRenderer, createPropsRestProxy, createRenderer, createSSRApp, createSlots, createStaticVNode, createTextVNode, createVNode, customRef, defineAsyncComponent, defineComponent, defineCustomElement, defineEmits, defineExpose, defineModel, defineOptions, defineProps, defineSSRCustomElement, defineSlots, devtools, effect, effectScope, getCurrentInstance, getCurrentScope, getTransitionRawChildren, guardReactiveProps, h, handleError, hasInjectionContext, hydrate, initCustomFormatter, initDirectivesForSSR, inject, isMemoSame, isProxy, isReactive, isReadonly, isRef, isRuntimeOnly, isShallow, isVNode, markRaw, mergeDefaults, mergeModels, mergeProps, nextTick, normalizeClass, normalizeProps, normalizeStyle, onActivated, onBeforeMount, onBeforeUnmount, onBeforeUpdate, onDeactivated, onErrorCaptured, onMounted, onRenderTracked, onRenderTriggered, onScopeDispose, onServerPrefetch, onUnmounted, onUpdated, openBlock, popScopeId, provide, proxyRefs, pushScopeId, queuePostFlushCb, reactive, readonly, ref, registerRuntimeCompiler, render, renderList, renderSlot, resolveComponent, resolveDirective, resolveDynamicComponent, resolveFilter, resolveTransitionHooks, setBlockTracking, setDevtoolsHook, setTransitionHooks, shallowReactive, shallowReadonly, shallowRef, ssrContextKey, ssrUtils, stop, toDisplayString, toHandlerKey, toHandlers, toRaw, toRef, toRefs, toValue, transformVNodeArgs, triggerRef, unref, useAttrs, useCssModule, useCssVars, useModel, useSSRContext, useSlots, useTransitionState, vModelCheckbox, vModelDynamic, vModelRadio, vModelSelect, vModelText, vShow, version, warn, watch, watchEffect, watchPostEffect, watchSyncEffect, withAsyncContext, withCtx, withDefaults, withDirectives, withKeys, withMemo, withModifiers, withScopeId };
+export { 
+  BaseTransition,
+  BaseTransitionPropsValidators,
+  Comment,
+  DeprecationTypes,
+  EffectScope,
+  ErrorCodes,
+  ErrorTypeStrings,
+  Fragment,
+  KeepAlive,
+  ReactiveEffect,
+  Static,
+  Suspense,
+  Teleport,
+  Text,
+  TrackOpTypes,
+  Transition,
+  TransitionGroup,
+  TriggerOpTypes,
+  VueElement,
+  assertNumber,
+  callWithAsyncErrorHandling,
+  callWithErrorHandling,
+  camelize,
+  capitalize,
+  cloneVNode,
+  compatUtils,
+  compile,
+  computed,
+  createApp,
+  createBlock,
+  createCommentVNode,
+  createElementBlock,
+  createBaseVNode as createElementVNode,
+  createHydrationRenderer,
+  createPropsRestProxy,
+  createRenderer,
+  createSSRApp,
+  createSlots,
+  createStaticVNode,
+  createTextVNode,
+  createVNode,
+  customRef,
+  defineAsyncComponent,
+  defineComponent,
+  defineCustomElement,
+  defineEmits,
+  defineExpose,
+  defineModel,
+  defineOptions,
+  defineProps,
+  defineSSRCustomElement,
+  defineSlots,
+  devtools,
+  effect,
+  effectScope,
+  getCurrentInstance,
+  getCurrentScope,
+  getTransitionRawChildren,
+  guardReactiveProps,
+  h,
+  handleError,
+  hasInjectionContext,
+  hydrate,
+  initCustomFormatter,
+  initDirectivesForSSR,
+  inject,
+  isMemoSame,
+  isProxy,
+  isReactive,
+  isReadonly,
+  isRef,
+  isRuntimeOnly,
+  isShallow,
+  isVNode,
+  markRaw,
+  mergeDefaults,
+  mergeModels,
+  mergeProps,
+  nextTick,
+  normalizeClass,
+  normalizeProps,
+  normalizeStyle,
+  onActivated,
+  onBeforeMount,
+  onBeforeUnmount,
+  onBeforeUpdate,
+  onDeactivated,
+  onErrorCaptured,
+  onMounted,
+  onRenderTracked,
+  onRenderTriggered,
+  onScopeDispose,
+  onServerPrefetch,
+  onUnmounted,
+  onUpdated,
+  openBlock,
+  popScopeId,
+  provide,
+  proxyRefs,
+  pushScopeId,
+  queuePostFlushCb,
+  reactive,
+  readonly,
+  ref,
+  registerRuntimeCompiler,
+  render,
+  renderList,
+  renderSlot,
+  resolveComponent,
+  resolveDirective,
+  resolveDynamicComponent,
+  resolveFilter,
+  resolveTransitionHooks,
+  setBlockTracking,
+  setDevtoolsHook,
+  setTransitionHooks,
+  shallowReactive,
+  shallowReadonly,
+  shallowRef,
+  ssrContextKey,
+  ssrUtils,
+  stop,
+  toDisplayString,
+  toHandlerKey,
+  toHandlers,
+  toRaw,
+  toRef,
+  toRefs,
+  toValue,
+  transformVNodeArgs,
+  triggerRef,
+  unref,
+  useAttrs,
+  useCssModule,
+  useCssVars,
+  useModel,
+  useSSRContext,
+  useSlots,
+  useTransitionState,
+  vModelCheckbox,
+  vModelDynamic,
+  vModelRadio,
+  vModelSelect,
+  vModelText,
+  vShow,
+  version,
+  warn,
+  watch,
+  watchEffect,
+  watchPostEffect,
+  watchSyncEffect,
+  withAsyncContext,
+  withCtx,
+  withDefaults,
+  withDirectives,
+  withKeys,
+  withMemo,
+  withModifiers,
+  withScopeId 
+};

@@ -21,10 +21,10 @@ function toGoPage () {
 
     <div class="wrapper">
       <nav>
-        <div @click="toPushPage('/home')">toPushPage Home</div>
-        <div @click="toPushPage('/about')">toPushPage About</div>
-        <div @click="toReplacePage('/demo-1')">toReplacePage demo-1</div>
-        <div @click="toGoPage()">toGo demo-1</div>
+        <div class="item" @click="toPushPage('/home')">toPushPage Home</div>
+        <div class="item" @click="toPushPage('/about')">toPushPage About</div>
+        <div class="item" @click="toReplacePage('/demo-1')">toReplacePage demo-1</div>
+        <div class="item" @click="toGoPage()">toGo demo-1</div>
       </nav>
     </div>
   </header>
@@ -79,10 +79,14 @@ nav a:first-of-type {
     margin: 0 2rem 0 0;
   }
 
+  header .wrapper .item {
+    cursor: pointer;
+  }
   header .wrapper {
     display: flex;
     place-items: flex-start;
     flex-wrap: wrap;
+    
   }
 
   nav {

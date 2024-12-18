@@ -1,6 +1,6 @@
 import './assets/main.css'
 
-import { createApp } from 'vue'
+import { createApp } from '@/vue/vue.runtime.esm-browser'
 import App from './App.vue'
 import router from './router'
 import { mirrorWatch } from './common/mirror'
@@ -10,7 +10,7 @@ mirrorWatch.init({
   systemId: 'vue-code',
   mutatedConsole: []
 });
-
+debugger;
 const app = createApp(App)
 app.use(router)
 app.mount('#app')

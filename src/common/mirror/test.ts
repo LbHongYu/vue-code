@@ -1,4 +1,4 @@
-import { mirrorWatch } from '@ai-meeting/common/utils/mirror/index';
+import { mirrorWatch } from './index';
 
 mirrorWatch.init({
   env: 'local', // 写死为 local
